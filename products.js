@@ -1,31 +1,27 @@
 const mongoose = require("mongoose");
 require("dotenv").config();
 
-const Category = require("./models/category");
-const Product = require("./models/products");
-const data = require("./data.json");
+const Pokemon = require("./models/Pokemon");
+const pokemonData = require("./pokemonData.json"); // 포켓몬 JSON 배열
 
-async function restoreProducts() {
+async function seedPokemon() {
+  try {
     await mongoose.connect(process.env.DATABASE, {});
+    console.log("MongoDB Connected");
 
-    await Category.deleteMany({});
-    await Product.deleteMany({});
+    // 기존 포켓몬 데이터 삭제
+    await Pokemon.deleteMany({});
+    console.log("Old Pokemon data removed");
 
-    for (let category of data) {
-        const { _id: categoryId } = await new Category({
-            name: category.name,
-            image: category.image,
-        }).save();
-        const products = category.products.map((product) => ({
-            ...product,
-            category: categoryId,
-        }));
-        await Product.insertMany(products);
-    }
+    // 새 데이터 삽입
+    await Pokemon.insertMany(pokemonData);
+    console.log("Pokemon data inserted successfully!");
 
     mongoose.disconnect();
-
-    console.info("Database Filled/Restored Successfully!!");
+  } catch (err) {
+    console.error("Error seeding Pokemon data:", err);
+    mongoose.disconnect();
+  }
 }
 
-restoreProducts();
+seedPokemon();

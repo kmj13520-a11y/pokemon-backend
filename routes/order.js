@@ -1,101 +1,98 @@
 const express = require("express");
 const router = express.Router();
-const mongoose = require("mongoose");
 
-const Order = require("../models/order");
-const Cart = require("../models/cart");
-const Products = require("../models/products");
+const Team = require("../models/Team"); // 아까 Order 스키마를 Team으로 바꿔둔 그 모델
 const auth = require("../middleware/auth");
-const admin = require("../middleware/admin");
 
-// add new order details when user pay the bill
-router.post("/checkout", auth, async (req, res) => {
+/**
+ * 1) 새 팀 생성
+ * POST /api/teams
+ * body: { name: string, pokemons: [{ pokemonId, name_ko, image }], isPublic?: boolean }
+ */
+router.post("/", auth, async (req, res) => {
   try {
-    const cart = await Cart.findOne({ user: req.user._id })
-      .populate("products.product")
-      .select("_id total products");
+    const { name, pokemons, isPublic } = req.body;
 
-    if (!cart) {
-      return res.status(400).json({ message: "Cart not found" });
-    }
-
-    // Check if all products are in stock
-    const outOfStock = cart.products.filter(
-      (item) => item.quantity > item.product.stock
-    );
-    if (outOfStock.length > 0) {
+    if (!name || !pokemons || !pokemons.length) {
       return res
         .status(400)
-        .json({ message: "One or more products are out of stock" });
+        .json({ message: "팀 이름과 포켓몬 목록을 입력해주세요." });
     }
 
-    const products = cart.products.map((item) => ({
-      product: item.product._id,
-      quantity: item.quantity,
-    }));
+    if (pokemons.length > 6) {
+      return res
+        .status(400)
+        .json({ message: "팀에는 최대 6마리의 포켓몬만 담을 수 있습니다." });
+    }
 
-    const order = new Order({
-      user: req.user._id,
-      products,
-      total: cart.total,
-      status: "paid",
+    const team = await Team.create({
+      user: req.user._id, // JWT 미들웨어에서 넣어준 사용자 ID
+      name,
+      pokemons, // [{ pokemonId, name_ko, image }, ...]
+      isPublic: !!isPublic,
     });
 
-    // Save order
-    await order.save();
-
-    // Reduce stock numbers for purchased products
-    for (const item of cart.products) {
-      const product = await Products.findById(item.product._id);
-      product.stock -= item.quantity;
-      await product.save();
-    }
-
-    // Remove current cart
-    const deleteCart = await Cart.findByIdAndDelete(cart._id);
-
-    res.json({ message: "Order placed successfully" });
+    return res.status(201).json({
+      message: "팀이 저장되었습니다.",
+      team,
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("TEAM CREATE ERROR:", err);
+    return res.status(500).json({ message: "서버 에러" });
   }
 });
 
-// get users oders
+/**
+ * 2) 내 팀 목록 조회
+ * GET /api/teams
+ */
 router.get("/", auth, async (req, res) => {
   try {
-    const orders = await Order.find({ user: req.user._id }).populate({
-      path: "products.product",
-      select: "posterImage title _id price",
+    const teams = await Team.find({ user: req.user._id }).sort({
+      createdAt: -1,
     });
-    res.json(orders);
+
+    return res.json({ teams });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("TEAM LIST ERROR:", err);
+    return res.status(500).json({ message: "서버 에러" });
   }
 });
 
-// change status to shipped by admin
-router.patch("/shipped/:id", auth, admin, async (req, res) => {
+/**
+ * 3) 팀 공개 여부 토글 / 변경
+ * PATCH /api/teams/:id/public
+ * body: { isPublic: boolean }
+ */
+router.patch("/:id/public", auth, async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
+    const { isPublic } = req.body;
+
+    const team = await Team.findOne({
+      _id: req.params.id,
+      user: req.user._id, // 내 팀만 수정 가능
+    });
+
+    if (!team) {
+      return res.status(404).json({ message: "팀을 찾을 수 없습니다." });
     }
 
-    if (order.status !== "paid") {
-      return res.status(400).json({
-        message: "Order must be paid before it can be shipped",
-      });
+    // true/false가 넘어오면 그 값 사용, 아니면 토글
+    if (typeof isPublic === "boolean") {
+      team.isPublic = isPublic;
+    } else {
+      team.isPublic = !team.isPublic;
     }
 
-    order.status = "shipped";
-    await order.save();
+    await team.save();
 
-    return res.json({ message: "Order status changed to shipped" });
+    return res.json({
+      message: `팀이 ${team.isPublic ? "공개" : "비공개"}로 설정되었습니다.`,
+      team,
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    console.error("TEAM PUBLIC ERROR:", err);
+    return res.status(500).json({ message: "서버 에러" });
   }
 });
 

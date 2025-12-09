@@ -1,18 +1,21 @@
 const jwt = require("jsonwebtoken");
 
-module.exports = function (req, res, next) {
-    const token = req.header("x-auth-token");
-    
-    if (!token)
-        return res
-            .status(401)
-            .json({ message: "Access denied (No Token Provided)" });
+module.exports = function auth(req, res, next) {
+  const authHeader = req.headers.authorization;
 
-    try {
-        const user = jwt.verify(token, process.env.JWTSECRET);
-        req.user = user;
-        next();
-    } catch (error) {
-        res.status(400).json({ message: "Invalid Token" });
-    }
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res
+      .status(401)
+      .json({ message: "토큰이 없습니다. 로그인 후 이용해주세요." });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (e) {
+    return res.status(400).json({ message: "유효하지 않은 토큰입니다." });
+  }
 };

@@ -1,18 +1,27 @@
 # Node.js
 node_modules/
 npm-debug.log
+package-lock.json
 
-# Express.js
+# Express / Environment
 .env
 
-# Mongoose
+# Mongoose / Mongo logs
 *.log
+
+# Uploads (multer)
+upload/
+# 또는 아래 개별적
+# upload/profiles/
 
 # IDE/Editor
 .vscode/
 .idea/
 *.code-workspace
 *.iml
+
+# OS files
+.DS_Store
 
 # Logs
 logs/
@@ -29,7 +38,6 @@ __tests__/
 *.test.js
 
 # Other
-.DS_Store
 *.pid
 *.seed
 *.pid.lock
